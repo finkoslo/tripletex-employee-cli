@@ -378,15 +378,9 @@ Configure these as Scaleway secrets:
 
 ### Deployment
 
-```bash
-cd server
-npm install
-npm run build
+Deployment is automated via GitHub Actions (`.github/workflows/deploy-auth.yml`). Pushing changes to `server/` on `main` triggers a deploy, or run the workflow manually.
 
-# Deploy to Scaleway (using their CLI or console)
-# Entry point: dist/handler.handle
-# Runtime: Node.js 22
-```
+The workflow builds the TypeScript, packages the function with production dependencies, and deploys to Scaleway Functions using the Scaleway CLI.
 
 **Google OAuth Setup:**
 
@@ -449,6 +443,7 @@ tripletex-employee-cli/
 │           ├── ActivityCommand.cs       # select
 │           └── ConfigCommand.cs         # show
 ├── .github/workflows/
+│   ├── deploy-auth.yml                  # Deploy auth function to Scaleway
 │   └── release.yml                      # Multi-platform build + GitHub Release
 └── .gitignore
 ```

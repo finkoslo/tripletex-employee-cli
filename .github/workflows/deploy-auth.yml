@@ -17,6 +17,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -31,12 +33,28 @@ jobs:
       - name: Build TypeScript
         run: npm run build
 
-      - name: Install Serverless Framework
-        run: npm install -g serverless serverless-scaleway-functions
+      - name: Install Scaleway CLI
+        run: |
+          curl -o /usr/local/bin/scw -L "https://github.com/scaleway/scaleway-cli/releases/download/v2.34.0/scaleway-cli_2.34.0_linux_amd64"
+          chmod +x /usr/local/bin/scw
+
+      - name: Package function
+        run: |
+          mkdir -p package
+          cp -r dist package/
+          cp package.json package-lock.json package/
+          cd package && npm ci --omit=dev
+          cd .. && zip -r function.zip package/
 
       - name: Deploy to Scaleway
-        run: serverless deploy
         env:
           SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
           SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
-          SCW_DEFAULT_PROJECT_ID: ${{ secrets.SCW_PROJECT_ID }}
+          SCW_DEFAULT_PROJECT_ID: ${{ secrets.SCW_DEFAULT_PROJECT_ID }}
+        run: |
+          scw function deploy \
+            name=tripletex-employee-auth \
+            namespace-id=${{ secrets.SCW_FUNCTIONS_NAMESPACE_ID }} \
+            runtime=node22 \
+            zip-file=function.zip \
+            region=nl-ams
