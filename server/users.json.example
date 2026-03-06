@@ -1,0 +1,4 @@
+{
+  "user@example.com": { "employeeId": 12345, "name": "Example User" },
+  "another@example.com": { "employeeId": 67890, "name": "Another User" }
+}

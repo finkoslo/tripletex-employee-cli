@@ -2,7 +2,7 @@
 
 A locked-down CLI for regular employees to manage their own timesheets in [Tripletex](https://www.tripletex.no/), authenticated via Google OAuth.
 
-Unlike the [admin CLI](https://github.com/your-org/tripletex-sdk), this tool restricts users to their own data — no access to other employees' timesheets, no delete/approve operations, and no manual token configuration. Authentication is handled through a Google OAuth flow restricted to `@fink.no` accounts.
+Unlike the [admin CLI](https://github.com/murdahl/tripletex-sdk), this tool restricts users to their own data — no access to other employees' timesheets, no delete/approve operations, and no manual token configuration. Authentication is handled through a Google OAuth flow restricted to `@fink.no` accounts.
 
 ## Table of Contents
 
@@ -48,13 +48,13 @@ Unlike the [admin CLI](https://github.com/your-org/tripletex-sdk), this tool res
 
 Download the latest binary for your platform from [Releases](../../releases):
 
-| Platform | File |
-|----------|------|
-| macOS (Apple Silicon) | `tripletex-employee-osx-arm64.tar.gz` |
-| macOS (Intel) | `tripletex-employee-osx-x64.tar.gz` |
-| Linux (x64) | `tripletex-employee-linux-x64.tar.gz` |
-| Linux (ARM64) | `tripletex-employee-linux-arm64.tar.gz` |
-| Windows (x64) | `tripletex-employee-win-x64.zip` |
+| Platform              | File                                    |
+| --------------------- | --------------------------------------- |
+| macOS (Apple Silicon) | `tripletex-employee-osx-arm64.tar.gz`   |
+| macOS (Intel)         | `tripletex-employee-osx-x64.tar.gz`     |
+| Linux (x64)           | `tripletex-employee-linux-x64.tar.gz`   |
+| Linux (ARM64)         | `tripletex-employee-linux-arm64.tar.gz` |
+| Windows (x64)         | `tripletex-employee-win-x64.zip`        |
 
 ```bash
 # macOS / Linux
@@ -95,8 +95,9 @@ Logged in as ole@fink.no (Employee ID: 123)
 ```
 
 **Requirements:**
+
 - A `@fink.no` Google account
-- Your email must be registered in the auth function's `users.json`
+- Your email must be registered in the auth function's `USERS_JSON` environment variable
 - Browser access (the CLI will attempt to open your default browser)
 
 If the browser doesn't open automatically, the CLI prints the URL for you to visit manually.
@@ -143,6 +144,7 @@ finkletex timesheet log 7.5 --date 2026-03-06 --comment "Feature work" \
 | `--activity-id` | Activity ID (uses saved default if omitted) |
 
 **Interactive wizard features:**
+
 - Filterable project and activity selection (type to search when list is long)
 - Back navigation between steps
 - Option to save selections as defaults
@@ -269,11 +271,11 @@ $ finkletex config show
 
 ### Global Options
 
-| Option | Description |
-|--------|-------------|
-| `--json` | Output results as JSON instead of tables |
-| `--help` | Show help for any command |
-| `--version` | Show version |
+| Option      | Description                              |
+| ----------- | ---------------------------------------- |
+| `--json`    | Output results as JSON instead of tables |
+| `--help`    | Show help for any command                |
+| `--version` | Show version                             |
 
 ## Configuration
 
@@ -299,9 +301,9 @@ Configuration is stored at `~/.tripletex-employee/config.json` (separate from th
 **Environment variable overrides:**
 | Variable | Description |
 |----------|-------------|
+| `FINKLETEX_AUTH_URL` | Override the default auth function URL |
 | `TRIPLETEX_CONSUMER_TOKEN` | Override consumer token from config |
 | `TRIPLETEX_EMPLOYEE_TOKEN` | Override employee token from config |
-| `TRIPLETEX_AUTH_URL` | Override the auth function URL |
 
 ## Server (Auth Function)
 
@@ -323,7 +325,7 @@ Browser                    Scaleway Function              Google OAuth
   │                              │<───────────────────────────│
   │                              │                            │
   │                              │  Validate domain (@fink.no)│
-  │                              │  Look up users.json        │
+  │                              │  Look up USERS_JSON env        │
   │                              │  Sign payload with HMAC    │
   │                              │                            │
   │  302 → localhost:X/callback?payload=SIGNED&state=Y        │
@@ -335,15 +337,15 @@ Browser                    Scaleway Function              Google OAuth
 
 ### Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/auth` | GET | Initiates OAuth flow. Params: `port`, `state` |
-| `/callback` | GET | Google OAuth callback. Validates domain, maps email to employee, returns signed payload |
-| `/health` | GET | Health check, returns `{"status": "ok"}` |
+| Endpoint    | Method | Description                                                                             |
+| ----------- | ------ | --------------------------------------------------------------------------------------- |
+| `/auth`     | GET    | Initiates OAuth flow. Params: `port`, `state`                                           |
+| `/callback` | GET    | Google OAuth callback. Validates domain, maps email to employee, returns signed payload |
+| `/health`   | GET    | Health check, returns `{"status": "ok"}`                                                |
 
 ### User Management
 
-Employee mappings are defined in `server/users.json`:
+Employee mappings are provided via the `USERS_JSON` environment variable (set as a Scaleway secret). See `server/users.json.example` for the format:
 
 ```json
 {
@@ -353,24 +355,26 @@ Employee mappings are defined in `server/users.json`:
 ```
 
 **To add a new employee:**
-1. Add their entry to `users.json`
-2. Redeploy the function
 
-Users with valid `@fink.no` Google accounts but not in `users.json` will see a clear error message asking them to contact their administrator.
+1. Update the `USERS_JSON` secret in the Scaleway console
+2. The function picks up changes on next invocation (no redeploy needed)
+
+Users with valid `@fink.no` Google accounts but not in `USERS_JSON` will see a clear error message asking them to contact their administrator.
 
 ### Environment Variables
 
 Configure these as Scaleway secrets:
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `GOOGLE_CLIENT_ID` | Yes | Google OAuth 2.0 client ID |
-| `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth 2.0 client secret |
-| `TRIPLETEX_CONSUMER_TOKEN` | Yes | Shared Tripletex consumer token |
-| `TRIPLETEX_EMPLOYEE_TOKEN` | Yes | Shared Tripletex employee token |
-| `HMAC_SECRET` | Yes | Secret key for signing payloads |
-| `FUNCTION_URL` | Yes | Public URL of the deployed function |
-| `ALLOWED_DOMAIN` | No | Email domain restriction (default: `fink.no`) |
+| Variable                   | Required | Description                                   |
+| -------------------------- | -------- | --------------------------------------------- |
+| `GOOGLE_CLIENT_ID`         | Yes      | Google OAuth 2.0 client ID                    |
+| `GOOGLE_CLIENT_SECRET`     | Yes      | Google OAuth 2.0 client secret                |
+| `TRIPLETEX_CONSUMER_TOKEN` | Yes      | Shared Tripletex consumer token               |
+| `TRIPLETEX_EMPLOYEE_TOKEN` | Yes      | Shared Tripletex employee token               |
+| `HMAC_SECRET`              | Yes      | Secret key for signing payloads               |
+| `FUNCTION_URL`             | Yes      | Public URL of the deployed function           |
+| `USERS_JSON`               | Yes      | JSON mapping of emails to employee IDs        |
+| `ALLOWED_DOMAIN`           | No       | Email domain restriction (default: `fink.no`) |
 
 ### Deployment
 
@@ -385,6 +389,7 @@ npm run build
 ```
 
 **Google OAuth Setup:**
+
 1. Go to [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials
 2. Create an OAuth 2.0 Client ID (Web application)
 3. Add `{FUNCTION_URL}/callback` as an authorized redirect URI
@@ -426,7 +431,7 @@ npm run dev       # Watch mode
 tripletex-employee-cli/
 ├── server/                              # TypeScript serverless function (Scaleway)
 │   ├── handler.ts                       # Auth endpoints (/auth, /callback, /health)
-│   ├── users.json                       # Email → employee ID mapping
+│   ├── users.json.example               # Example email → employee ID mapping
 │   ├── package.json
 │   └── tsconfig.json
 ├── src/
@@ -449,6 +454,7 @@ tripletex-employee-cli/
 ```
 
 **Dependencies:**
+
 - [`Tripletex.Api`](https://www.nuget.org/packages/Tripletex.Api) — NuGet package for all Tripletex API operations
 - [`System.CommandLine`](https://github.com/dotnet/command-line-api) — CLI argument parsing
 - [`Spectre.Console`](https://spectreconsole.net/) — Rich terminal output (tables, prompts, colors)
@@ -463,6 +469,7 @@ git push origin v1.0.0
 ```
 
 This triggers the release workflow which:
+
 1. Builds self-contained binaries for 5 platforms (macOS ARM/x64, Linux x64/ARM64, Windows x64)
 2. Archives them (`.tar.gz` for Unix, `.zip` for Windows)
 3. Creates a GitHub Release with auto-generated release notes
@@ -470,46 +477,50 @@ This triggers the release workflow which:
 ## Security
 
 **Authentication:**
+
 - Google OAuth with domain restriction (`hd=fink.no`) — only `@fink.no` accounts can authenticate
 - Double validation: Google's `hd` parameter + server-side domain check on the verified email
-- Email must exist in `users.json` — valid Google accounts without a mapping are rejected
+- Email must exist in `USERS_JSON` — valid Google accounts without a mapping are rejected
 - HMAC-signed payloads prevent tampering during the localhost redirect
 - OAuth state parameter prevents CSRF attacks
 
 **Authorization:**
+
 - Employee ID is set during login and cannot be changed by the user
 - All timesheet queries are forced to the authenticated employee's ID
 - No delete, approve, or admin operations are exposed
 - Project and activity commands are read-only
 
 **Token storage:**
+
 - Tokens are stored in plaintext at `~/.tripletex-employee/config.json`
 - This is consistent with standard CLI tools (AWS CLI, gcloud, GitHub CLI, kubectl)
 - Protected by filesystem permissions — only the owning user can read their home directory
 - Tokens can be overridden via environment variables for CI/CD use cases
 
 **Server-side:**
+
 - Tripletex consumer/employee tokens are stored as Scaleway secrets, never exposed to the client
 - The HMAC secret is server-side only — clients cannot forge payloads
 - Token payloads include an expiration timestamp
 
 ## Comparison with Admin CLI
 
-| Feature | Admin CLI | Employee CLI |
-|---------|-----------|--------------|
-| Command | `tripletex` | `finkletex` |
-| Authentication | Manual token config | Google OAuth |
-| Token setup | `config set --consumer-token` | `login` (automatic) |
-| Employee scope | Any employee (via `--employee-id`) | Own employee only |
-| Timesheet log | All employees | Own only |
-| Timesheet list | All employees | Own only |
-| Timesheet delete | Yes | No |
-| Timesheet approve | Yes | No |
-| Timesheet total-hours | Yes | No |
-| Employee management | Yes | No |
-| Customer management | Yes | No |
-| Invoice management | Yes | No |
-| Supplier management | Yes | No |
-| Project write ops | Yes | No (read-only) |
-| Config directory | `~/.tripletex/` | `~/.tripletex-employee/` |
-| Distribution | NuGet + binaries | Binaries only |
+| Feature               | Admin CLI                          | Employee CLI             |
+| --------------------- | ---------------------------------- | ------------------------ |
+| Command               | `tripletex`                        | `finkletex`              |
+| Authentication        | Manual token config                | Google OAuth             |
+| Token setup           | `config set --consumer-token`      | `login` (automatic)      |
+| Employee scope        | Any employee (via `--employee-id`) | Own employee only        |
+| Timesheet log         | All employees                      | Own only                 |
+| Timesheet list        | All employees                      | Own only                 |
+| Timesheet delete      | Yes                                | No                       |
+| Timesheet approve     | Yes                                | No                       |
+| Timesheet total-hours | Yes                                | No                       |
+| Employee management   | Yes                                | No                       |
+| Customer management   | Yes                                | No                       |
+| Invoice management    | Yes                                | No                       |
+| Supplier management   | Yes                                | No                       |
+| Project write ops     | Yes                                | No (read-only)           |
+| Config directory      | `~/.tripletex/`                    | `~/.tripletex-employee/` |
+| Distribution          | NuGet + binaries                   | Binaries only            |

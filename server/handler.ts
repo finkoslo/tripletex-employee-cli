@@ -1,7 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { OAuth2Client } from "google-auth-library";
-import users from "./users.json";
-
 interface ScalewayEvent {
   path: string;
   httpMethod: string;
@@ -24,7 +22,13 @@ const TRIPLETEX_EMPLOYEE_TOKEN = process.env.TRIPLETEX_EMPLOYEE_TOKEN!;
 const ALLOWED_DOMAIN = process.env.ALLOWED_DOMAIN || "fink.no";
 const TOKEN_EXPIRY_SECONDS = 60 * 60 * 24 * 365;
 
-const userMap = users as Record<string, { employeeId: number; name: string }>;
+type UserMap = Record<string, { employeeId: number; name: string }>;
+
+function loadUsers(): UserMap {
+  const raw = process.env.USERS_JSON;
+  if (!raw) throw new Error("USERS_JSON environment variable is not set");
+  return JSON.parse(raw) as UserMap;
+}
 
 function redirect(url: string): ScalewayResponse {
   return { statusCode: 302, headers: { Location: url } };
@@ -137,6 +141,7 @@ async function handleCallback(
     );
   }
 
+  const userMap = loadUsers();
   const user = userMap[email];
   if (!user) {
     return errorPage(

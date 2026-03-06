@@ -12,7 +12,6 @@ namespace Tripletex.EmployeeCli.Commands;
 
 public static class LoginCommand
 {
-    private const string DefaultAuthUrl = "https://tripletex-auth.functions.fnc.fr-par.scw.cloud";
     private const int TimeoutSeconds = 120;
 
     public static Command Create()
@@ -21,7 +20,8 @@ public static class LoginCommand
 
         cmd.SetHandler(async () =>
         {
-            var authUrl = System.Environment.GetEnvironmentVariable("TRIPLETEX_AUTH_URL") ?? DefaultAuthUrl;
+            var authUrl = System.Environment.GetEnvironmentVariable("FINKLETEX_AUTH_URL")
+                ?? "https://authfinkletexspkdnilo-finkletext-oauth.functions.fnc.nl-ams.scw.cloud";
             var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
             var port = GetAvailablePort();
             var prefix = $"http://localhost:{port}/";
