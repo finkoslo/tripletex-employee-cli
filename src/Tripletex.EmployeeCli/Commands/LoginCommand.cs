@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Spectre.Console;
 using Tripletex.EmployeeCli.Configuration;
 
@@ -164,11 +165,17 @@ public static class LoginCommand
 
     private sealed class LoginPayload
     {
+        [JsonPropertyName("consumerToken")]
         public string? ConsumerToken { get; set; }
+        [JsonPropertyName("employeeToken")]
         public string? EmployeeToken { get; set; }
+        [JsonPropertyName("employeeId")]
         public int EmployeeId { get; set; }
+        [JsonPropertyName("employeeName")]
         public string? EmployeeName { get; set; }
+        [JsonPropertyName("email")]
         public string? Email { get; set; }
+        [JsonPropertyName("exp")]
         public long Exp { get; set; }
     }
 }
