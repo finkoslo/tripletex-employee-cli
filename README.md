@@ -44,7 +44,15 @@ Unlike the [admin CLI](https://github.com/murdahl/tripletex-sdk), this tool rest
 
 ## Installation
 
-### From GitHub Releases
+### Quick Install (macOS / Linux)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/finkoslo/tripletex-employee-cli/main/install.sh | bash
+```
+
+This auto-detects your OS and architecture, downloads the latest release, and installs to `/usr/local/bin`.
+
+### Manual Download
 
 Download the latest binary for your platform from [Releases](../../releases):
 
@@ -58,7 +66,7 @@ Download the latest binary for your platform from [Releases](../../releases):
 
 ```bash
 # macOS / Linux
-tar -xzf tripletex-employee-osx-arm64.tar.gz
+tar xzf tripletex-employee-osx-arm64.tar.gz
 sudo mv finkletex /usr/local/bin/
 
 # Windows — extract the zip and add to PATH
