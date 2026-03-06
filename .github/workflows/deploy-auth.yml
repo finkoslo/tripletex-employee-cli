@@ -40,11 +40,10 @@ jobs:
 
       - name: Package function
         run: |
-          mkdir -p package
-          cp -r dist package/
-          cp package.json package-lock.json package/
-          cd package && npm ci --omit=dev
-          cd .. && zip -r function.zip package/
+          mkdir -p bundle
+          cp dist/handler.js bundle/
+          cp package.json package-lock.json bundle/
+          cd bundle && npm ci --omit=dev && zip -r ../function.zip .
 
       - name: Deploy to Scaleway
         env:
@@ -54,7 +53,7 @@ jobs:
           SCW_DEFAULT_PROJECT_ID: ${{ secrets.SCW_DEFAULT_PROJECT_ID }}
         run: |
           scw function deploy \
-            name=tripletex-employee-auth \
+            name=finkletext-oauth \
             namespace-id=${{ secrets.SCW_FUNCTIONS_NAMESPACE_ID }} \
             runtime=node22 \
             zip-file=function.zip \
