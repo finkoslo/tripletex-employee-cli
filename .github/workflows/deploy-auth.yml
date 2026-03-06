@@ -35,7 +35,7 @@ jobs:
 
       - name: Install Scaleway CLI
         run: |
-          curl -o /usr/local/bin/scw -L "https://github.com/scaleway/scaleway-cli/releases/download/v2.34.0/scaleway-cli_2.34.0_linux_amd64"
+          curl -o /usr/local/bin/scw -L "https://github.com/scaleway/scaleway-cli/releases/download/v2.52.0/scaleway-cli_2.52.0_linux_amd64"
           chmod +x /usr/local/bin/scw
 
       - name: Package function
@@ -50,6 +50,7 @@ jobs:
         env:
           SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
           SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
+          SCW_DEFAULT_ORGANIZATION_ID: ${{ secrets.SCW_DEFAULT_ORGANIZATION_ID }}
           SCW_DEFAULT_PROJECT_ID: ${{ secrets.SCW_DEFAULT_PROJECT_ID }}
         run: |
           scw function deploy \
