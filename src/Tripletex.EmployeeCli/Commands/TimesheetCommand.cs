@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Globalization;
 using Spectre.Console;
 using Tripletex.Api;
 using Tripletex.Api.Models;
@@ -16,7 +17,36 @@ public static class TimesheetCommand
         cmd.AddCommand(CreateLogWeekCommand(jsonOption));
         cmd.AddCommand(CreateListCommand(jsonOption));
         cmd.AddCommand(CreateRecentCommand(jsonOption));
+        cmd.AddCommand(CreateWeekCommand(jsonOption));
         return cmd;
+    }
+
+    public static IEnumerable<Command> CreateShortcuts(Option<bool> jsonOption)
+    {
+        var l = CreateLogCommand(jsonOption);
+        l.Name = "l";
+        l.Description = "Log hours (shortcut for 'timesheet log')";
+        yield return l;
+
+        var lw = CreateLogWeekCommand(jsonOption);
+        lw.Name = "lw";
+        lw.Description = "Log a full week (shortcut for 'timesheet log-week')";
+        yield return lw;
+
+        var r = CreateRecentCommand(jsonOption);
+        r.Name = "r";
+        r.Description = "Show recent entries (shortcut for 'timesheet recent')";
+        yield return r;
+
+        var w = CreateWeekCommand(jsonOption);
+        w.Name = "w";
+        w.Description = "Show weekly hours (shortcut for 'timesheet week')";
+        yield return w;
+
+        var ls = CreateListCommand(jsonOption);
+        ls.Name = "ls";
+        ls.Description = "List entries (shortcut for 'timesheet list')";
+        yield return ls;
     }
 
     private enum LogStep { Project, Activity, Hours, Date, Comment, Confirm }
@@ -190,6 +220,7 @@ public static class TimesheetCommand
                         {
                             AnsiConsole.MarkupLine(
                                 $"[green]Logged {resolvedHours}h on {resolvedDate:yyyy-MM-dd} \u2014 {Markup.Escape(projectName ?? resolvedProject.ToString()!)} / {Markup.Escape(activityName ?? resolvedActivity.ToString()!)}[/]");
+                            await DisplayWeekAsync(client, employeeId, resolvedDate!.Value, "table");
                         }
                         return;
                     }
@@ -259,6 +290,8 @@ public static class TimesheetCommand
                 var total = hoursPerDay.Sum();
                 AnsiConsole.MarkupLine(
                     $"[green]Logged {entries.Count} entries ({total}h total) for week starting {ws:yyyy-MM-dd}[/]");
+                var employeeId = ConfigStore.GetEmployeeId(config);
+                await DisplayWeekAsync(client, employeeId, ws, "table");
             }
         });
 
@@ -452,5 +485,221 @@ public static class TimesheetCommand
         }
 
         return (selected.Id, activityName, false);
+    }
+
+    private static Command CreateWeekCommand(Option<bool> jsonOption)
+    {
+        var dateOption = new Option<string?>("--date", "Any date in the target week (yyyy-MM-dd), defaults to today");
+        var styleOption = new Option<string>("--style", () => "table", "Display style: table, grid, or compact");
+
+        var cmd = new Command("week", "Show weekly hours summary with project breakdown") { dateOption, styleOption };
+
+        cmd.SetHandler(async (d, style, json) =>
+        {
+            var targetDate = d is not null ? DateOnly.Parse(d) : DateOnly.FromDateTime(DateTime.Today);
+            var config = ConfigStore.Load();
+            var employeeId = ConfigStore.GetEmployeeId(config);
+            using var client = ClientFactory.Create(config);
+
+            await DisplayWeekAsync(client, employeeId, targetDate, style, json);
+        }, dateOption, styleOption, jsonOption);
+
+        return cmd;
+    }
+
+    internal static async Task DisplayWeekAsync(TripletexClient client, int employeeId, DateOnly dateInWeek, string style = "table", bool json = false)
+    {
+        var monday = dateInWeek.AddDays(-(int)dateInWeek.DayOfWeek + (int)DayOfWeek.Monday);
+        if (dateInWeek.DayOfWeek == DayOfWeek.Sunday)
+            monday = monday.AddDays(-7);
+        var sunday = monday.AddDays(6);
+
+        var result = await client.Timesheet.SearchAsync(new TimesheetSearchOptions
+        {
+            EmployeeId = employeeId,
+            DateFrom = monday,
+            DateTo = sunday.AddDays(1),
+            Count = 1000,
+            Sorting = "date",
+        });
+
+        var entries = result.Values ?? [];
+
+        if (json)
+        {
+            OutputFormatter.PrintList<TimesheetEntry>(entries, true);
+            return;
+        }
+
+        var projectIds = entries
+            .Where(e => e.Project is not null)
+            .Select(e => e.Project!.Id)
+            .Distinct()
+            .ToList();
+
+        var projectNames = new Dictionary<int, string>();
+        foreach (var pid in projectIds)
+        {
+            try
+            {
+                var project = await client.Project.GetAsync(pid, fields: "id,name");
+                projectNames[pid] = project.Name ?? $"Project {pid}";
+            }
+            catch
+            {
+                projectNames[pid] = $"Project {pid}";
+            }
+        }
+
+        var weekNumber = ISOWeek.GetWeekOfYear(monday.ToDateTime(TimeOnly.MinValue));
+        var weekLabel = $"Week {weekNumber} ({monday:MMM d} - {sunday:MMM d})";
+
+        const decimal weeklyTarget = 37.5m;
+
+        switch (style.ToLowerInvariant())
+        {
+            case "compact":
+                DisplayCompact(entries, projectNames, monday, weekLabel, weeklyTarget);
+                break;
+            case "grid":
+                DisplayGrid(entries, monday, weekLabel, weeklyTarget);
+                break;
+            default:
+                DisplayTable(entries, projectNames, monday, weekLabel, weeklyTarget);
+                break;
+        }
+    }
+
+    private static void DisplayTable(IReadOnlyList<TimesheetEntry> entries, Dictionary<int, string> projectNames, DateOnly monday, string weekLabel, decimal weeklyTarget)
+    {
+        var dayNames = new[] { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
+
+        var grouped = entries
+            .Where(e => e.Project is not null && e.Date is not null)
+            .GroupBy(e => e.Project!.Id)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var hasSatSun = entries.Any(e =>
+        {
+            if (e.Date is null) return false;
+            var d = DateOnly.Parse(e.Date);
+            return d.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+        });
+
+        var dayCount = hasSatSun ? 7 : 5;
+
+        AnsiConsole.MarkupLine($"\n[bold]{Markup.Escape(weekLabel)}[/]");
+
+        var table = new Table()
+            .Border(TableBorder.Rounded)
+            .AddColumn(new TableColumn("Project").NoWrap());
+
+        for (var i = 0; i < dayCount; i++)
+            table.AddColumn(new TableColumn(dayNames[i]).Centered());
+        table.AddColumn(new TableColumn("[bold]Total[/]").Centered());
+
+        foreach (var (projectId, projectEntries) in grouped.OrderBy(g => projectNames.GetValueOrDefault(g.Key, "")))
+        {
+            var row = new List<string> { $"[cyan]{Markup.Escape(projectNames.GetValueOrDefault(projectId, $"Project {projectId}"))}[/]" };
+            decimal projectTotal = 0;
+
+            for (var i = 0; i < dayCount; i++)
+            {
+                var day = monday.AddDays(i);
+                var dayHours = projectEntries
+                    .Where(e => e.Date is not null && DateOnly.Parse(e.Date) == day)
+                    .Sum(e => e.Hours);
+                projectTotal += dayHours;
+                row.Add(dayHours > 0 ? $"{dayHours:0.#}" : "[dim]-[/]");
+            }
+            row.Add($"[bold]{projectTotal:0.#}[/]");
+            table.AddRow(row.ToArray());
+        }
+
+        table.AddEmptyRow();
+
+        var totalRow = new List<string> { "[bold]Total[/]" };
+        decimal grandTotal = 0;
+        for (var i = 0; i < dayCount; i++)
+        {
+            var day = monday.AddDays(i);
+            var dayTotal = entries
+                .Where(e => e.Date is not null && DateOnly.Parse(e.Date) == day)
+                .Sum(e => e.Hours);
+            grandTotal += dayTotal;
+            totalRow.Add($"[bold]{(dayTotal > 0 ? $"{dayTotal:0.#}" : "-")}[/]");
+        }
+        totalRow.Add($"[bold]{grandTotal:0.#}[/]");
+        table.AddRow(totalRow.ToArray());
+
+        AnsiConsole.Write(table);
+
+        var check = grandTotal >= weeklyTarget ? "[green]\u2713[/]" : $"[yellow]{weeklyTarget - grandTotal:0.#}h remaining[/]";
+        AnsiConsole.MarkupLine($"  {grandTotal:0.#} / {weeklyTarget}h {check}");
+    }
+
+    private static void DisplayGrid(IReadOnlyList<TimesheetEntry> entries, DateOnly monday, string weekLabel, decimal weeklyTarget)
+    {
+        AnsiConsole.MarkupLine($"\n[bold]{Markup.Escape(weekLabel)}[/]");
+
+        var table = new Table()
+            .Border(TableBorder.Rounded)
+            .AddColumn("Day")
+            .AddColumn(new TableColumn("Hours").Centered())
+            .AddColumn("Visual");
+
+        decimal total = 0;
+        for (var i = 0; i < 7; i++)
+        {
+            var day = monday.AddDays(i);
+            var dayHours = entries
+                .Where(e => e.Date is not null && DateOnly.Parse(e.Date) == day)
+                .Sum(e => e.Hours);
+            total += dayHours;
+
+            if (i >= 5 && dayHours == 0) continue;
+
+            var barFilled = (int)Math.Round((double)dayHours);
+            var barEmpty = Math.Max(0, 8 - barFilled);
+            var bar = new string('\u2588', barFilled) + new string('\u2591', barEmpty);
+            var color = dayHours >= 7.5m ? "green" : dayHours > 0 ? "yellow" : "dim";
+
+            table.AddRow(
+                $"{day:ddd M/d}",
+                $"[{color}]{dayHours:0.#}[/]",
+                $"[{color}]{bar}[/]");
+        }
+
+        AnsiConsole.Write(table);
+
+        var check = total >= weeklyTarget ? "[green]\u2713[/]" : $"[yellow]{weeklyTarget - total:0.#}h remaining[/]";
+        AnsiConsole.MarkupLine($"  Total: {total:0.#} / {weeklyTarget}h {check}");
+    }
+
+    private static void DisplayCompact(IReadOnlyList<TimesheetEntry> entries, Dictionary<int, string> projectNames, DateOnly monday, string weekLabel, decimal weeklyTarget)
+    {
+        AnsiConsole.MarkupLine($"\n[bold]{Markup.Escape(weekLabel)}[/]");
+
+        decimal total = 0;
+        for (var i = 0; i < 7; i++)
+        {
+            var day = monday.AddDays(i);
+            var dayHours = entries
+                .Where(e => e.Date is not null && DateOnly.Parse(e.Date) == day)
+                .Sum(e => e.Hours);
+            total += dayHours;
+
+            if (i >= 5 && dayHours == 0) continue;
+
+            var barFilled = (int)Math.Round((double)dayHours);
+            var bar = new string('\u2588', barFilled);
+            var color = dayHours >= 7.5m ? "green" : dayHours > 0 ? "yellow" : "dim";
+
+            AnsiConsole.MarkupLine($"  {day:ddd}  [{color}]{dayHours,4:0.#}h  {bar}[/]");
+        }
+
+        AnsiConsole.WriteLine();
+        var check = total >= weeklyTarget ? "[green]\u2713[/]" : $"[yellow]{weeklyTarget - total:0.#}h remaining[/]";
+        AnsiConsole.MarkupLine($"  Total: {total:0.#} / {weeklyTarget}h {check}");
     }
 }

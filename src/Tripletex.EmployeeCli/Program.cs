@@ -20,6 +20,9 @@ rootCommand.AddCommand(ProjectCommand.Create(jsonOption));
 rootCommand.AddCommand(ActivityCommand.Create());
 rootCommand.AddCommand(UpdateCommand.Create());
 
+foreach (var shortcut in TimesheetCommand.CreateShortcuts(jsonOption))
+    rootCommand.AddCommand(shortcut);
+
 var parser = new CommandLineBuilder(rootCommand)
     .UseDefaults()
     .UseExceptionHandler((ex, ctx) =>
