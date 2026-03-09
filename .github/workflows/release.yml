@@ -4,17 +4,17 @@ on:
   push:
     branches: [main]
     paths: ['src/Tripletex.EmployeeCli/**']
-    tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   tag:
-    if: github.ref_type != 'tag'
     runs-on: ubuntu-latest
     outputs:
-      new_tag: ${{ steps.bump.outputs.NEW_TAG }}
+      tag: ${{ steps.bump.outputs.NEW_TAG }}
+      version: ${{ steps.bump.outputs.VERSION }}
 
     steps:
       - uses: actions/checkout@v4
@@ -30,6 +30,7 @@ jobs:
           IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
           NEW_TAG="v${MAJOR}.${MINOR}.$((PATCH + 1))"
           echo "New tag: $NEW_TAG"
+          echo "VERSION=${NEW_TAG#v}" >> "$GITHUB_OUTPUT"
           echo "NEW_TAG=$NEW_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag
@@ -37,28 +38,8 @@ jobs:
           git tag ${{ steps.bump.outputs.NEW_TAG }}
           git push origin ${{ steps.bump.outputs.NEW_TAG }}
 
-  resolve-version:
-    needs: [tag]
-    if: always() && !failure() && !cancelled()
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.resolve.outputs.VERSION }}
-      tag: ${{ steps.resolve.outputs.TAG }}
-
-    steps:
-      - name: Resolve version
-        id: resolve
-        run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            TAG="${GITHUB_REF_NAME}"
-          else
-            TAG="${{ needs.tag.outputs.new_tag }}"
-          fi
-          echo "TAG=$TAG" >> "$GITHUB_OUTPUT"
-          echo "VERSION=${TAG#v}" >> "$GITHUB_OUTPUT"
-
   build:
-    needs: [resolve-version]
+    needs: [tag]
     strategy:
       matrix:
         include:
@@ -93,7 +74,7 @@ jobs:
           dotnet publish src/Tripletex.EmployeeCli/Tripletex.EmployeeCli.csproj
           -c Release
           -r ${{ matrix.rid }}
-          -p:Version=${{ needs.resolve-version.outputs.version }}
+          -p:Version=${{ needs.tag.outputs.version }}
           -o ./publish
 
       - name: Archive (unix)
@@ -112,7 +93,7 @@ jobs:
           path: ${{ matrix.artifact }}.*
 
   release:
-    needs: [resolve-version, build]
+    needs: [tag, build]
     runs-on: ubuntu-latest
 
     steps:
@@ -125,6 +106,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.resolve-version.outputs.tag }}
+          tag_name: ${{ needs.tag.outputs.tag }}
           generate_release_notes: true
           files: artifacts/*
