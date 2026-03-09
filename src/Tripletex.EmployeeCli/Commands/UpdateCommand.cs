@@ -2,40 +2,27 @@ using System.CommandLine;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Net.Http.Json;
-using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Text.Json.Serialization;
 using Spectre.Console;
 
 namespace Tripletex.EmployeeCli.Commands;
 
 public static class UpdateCommand
 {
-    private const string RepoOwner = "finkoslo";
-    private const string RepoName = "tripletex-employee-cli";
-    private const string ReleasesUrl = $"https://api.github.com/repos/{RepoOwner}/{RepoName}/releases/latest";
-
     public static Command Create()
     {
         var cmd = new Command("update", "Update finkletex to the latest version");
 
         cmd.SetHandler(async () =>
         {
-            var currentVersion = Assembly.GetEntryAssembly()
-                ?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-                ?.InformationalVersion ?? "0.0.0";
-
-            // Strip build metadata (e.g. 1.0.0+abc123)
-            var plusIndex = currentVersion.IndexOf('+');
-            if (plusIndex >= 0)
-                currentVersion = currentVersion[..plusIndex];
+            var currentVersion = UpdateChecker.GetCurrentVersion();
 
             using var http = new HttpClient();
             http.DefaultRequestHeaders.UserAgent.ParseAdd("finkletex-updater");
 
             var release = await AnsiConsole.Status()
                 .StartAsync("Checking for updates...", async _ =>
-                    await http.GetFromJsonAsync<GitHubRelease>(ReleasesUrl));
+                    await http.GetFromJsonAsync<UpdateChecker.GitHubRelease>(UpdateChecker.ReleasesUrl));
 
             if (release?.TagName is null)
             {
@@ -115,9 +102,33 @@ public static class UpdateCommand
                     return;
                 }
 
+                // Check write permissions before attempting self-replace
+                if (!HasWritePermission(currentBinary))
+                {
+                    if (!isWindows)
+                    {
+                        AnsiConsole.MarkupLine("[yellow]No write permission to install directory. Re-running with sudo...[/]");
+                        Environment.Exit(ReExecWithSudo(currentBinary));
+                        return;
+                    }
+
+                    AnsiConsole.MarkupLine("[red]No write permission to install directory. Please run as Administrator.[/]");
+                    return;
+                }
+
                 // Self-replace: rename current → .old, move new → current, delete .old
                 var backupPath = currentBinary + ".old";
-                File.Move(currentBinary, backupPath, overwrite: true);
+                try
+                {
+                    File.Move(currentBinary, backupPath, overwrite: true);
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    AnsiConsole.MarkupLine(isWindows
+                        ? "[red]Permission denied. Please run as Administrator.[/]"
+                        : "[red]Permission denied. Please run with sudo.[/]");
+                    return;
+                }
 
                 try
                 {
@@ -125,7 +136,6 @@ public static class UpdateCommand
                 }
                 catch
                 {
-                    // Restore backup on failure
                     File.Move(backupPath, currentBinary, overwrite: true);
                     throw;
                 }
@@ -158,6 +168,39 @@ public static class UpdateCommand
         return cmd;
     }
 
+    private static bool HasWritePermission(string binaryPath)
+    {
+        var dir = Path.GetDirectoryName(binaryPath)!;
+        var testFile = Path.Combine(dir, $".finkletex-write-test-{Guid.NewGuid():N}");
+        try
+        {
+            File.WriteAllText(testFile, "");
+            File.Delete(testFile);
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
+    private static int ReExecWithSudo(string currentBinary)
+    {
+        var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = "sudo",
+            ArgumentList = { currentBinary, "update" },
+            UseShellExecute = false
+        });
+
+        process?.WaitForExit();
+        return process?.ExitCode ?? 1;
+    }
+
     private static (string platform, string arch) GetPlatformArch()
     {
         var platform = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "osx"
@@ -173,21 +216,4 @@ public static class UpdateCommand
         return (platform, arch);
     }
 
-    private sealed class GitHubRelease
-    {
-        [JsonPropertyName("tag_name")]
-        public string? TagName { get; set; }
-
-        [JsonPropertyName("assets")]
-        public List<GitHubAsset>? Assets { get; set; }
-    }
-
-    private sealed class GitHubAsset
-    {
-        [JsonPropertyName("name")]
-        public string? Name { get; set; }
-
-        [JsonPropertyName("browser_download_url")]
-        public string? BrowserDownloadUrl { get; set; }
-    }
 }

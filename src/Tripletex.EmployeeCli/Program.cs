@@ -4,7 +4,12 @@ using System.CommandLine.Parsing;
 using System.Reflection;
 using Spectre.Console;
 using Tripletex.Api.Models;
+using Tripletex.EmployeeCli;
 using Tripletex.EmployeeCli.Commands;
+
+var updateCheck = args.Any(a => a.Equals("update", StringComparison.OrdinalIgnoreCase))
+    ? null
+    : UpdateChecker.CheckForUpdateAsync();
 
 var jsonOption = new Option<bool>("--json", "Output results as JSON");
 
@@ -65,7 +70,16 @@ var parser = new CommandLineBuilder(rootCommand)
     })
     .Build();
 
-return await parser.InvokeAsync(args);
+var exitCode = await parser.InvokeAsync(args);
+
+if (updateCheck is not null)
+{
+    var latestVersion = await updateCheck;
+    if (latestVersion is not null)
+        AnsiConsole.MarkupLine($"[yellow]Update available: v{latestVersion}. Run [bold]finkletex update[/] to upgrade.[/]");
+}
+
+return exitCode;
 
 static bool IsAuthError(Exception ex) =>
     ex.Message.Contains("Not logged in", StringComparison.OrdinalIgnoreCase)
