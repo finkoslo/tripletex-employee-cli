@@ -2,13 +2,63 @@ name: Release
 
 on:
   push:
+    branches: [main]
+    paths: ['src/Tripletex.EmployeeCli/**']
     tags: ['v*']
 
 permissions:
   contents: write
 
 jobs:
+  tag:
+    if: github.ref_type != 'tag'
+    runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.bump.outputs.NEW_TAG }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest tag and bump patch
+        id: bump
+        run: |
+          LATEST=$(git describe --tags --match 'v*' --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST"
+          VERSION="${LATEST#v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          NEW_TAG="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+          echo "New tag: $NEW_TAG"
+          echo "NEW_TAG=$NEW_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        run: |
+          git tag ${{ steps.bump.outputs.NEW_TAG }}
+          git push origin ${{ steps.bump.outputs.NEW_TAG }}
+
+  resolve-version:
+    needs: [tag]
+    if: always() && !failure() && !cancelled()
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.VERSION }}
+      tag: ${{ steps.resolve.outputs.TAG }}
+
+    steps:
+      - name: Resolve version
+        id: resolve
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="${{ needs.tag.outputs.new_tag }}"
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_OUTPUT"
+          echo "VERSION=${TAG#v}" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: [resolve-version]
     strategy:
       matrix:
         include:
@@ -38,17 +88,12 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
-      - name: Extract version from tag
-        id: version
-        shell: bash
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
       - name: Publish
         run: >
           dotnet publish src/Tripletex.EmployeeCli/Tripletex.EmployeeCli.csproj
           -c Release
           -r ${{ matrix.rid }}
-          -p:Version=${{ steps.version.outputs.VERSION }}
+          -p:Version=${{ needs.resolve-version.outputs.version }}
           -o ./publish
 
       - name: Archive (unix)
@@ -67,7 +112,7 @@ jobs:
           path: ${{ matrix.artifact }}.*
 
   release:
-    needs: [build]
+    needs: [resolve-version, build]
     runs-on: ubuntu-latest
 
     steps:
@@ -80,5 +125,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.resolve-version.outputs.tag }}
           generate_release_notes: true
           files: artifacts/*
