@@ -337,7 +337,14 @@ public static class TimesheetCommand
             var config = ConfigStore.Load();
             var employeeId = ConfigStore.GetEmployeeId(config);
             using var client = ClientFactory.Create(config);
-            var result = await client.Timesheet.GetRecentAsync(employeeId);
+            var result = await client.Timesheet.SearchAsync(new TimesheetSearchOptions
+            {
+                EmployeeId = employeeId,
+                DateFrom = DateOnly.FromDateTime(DateTime.Today.AddDays(-30)),
+                DateTo = DateOnly.FromDateTime(DateTime.Today.AddDays(1)),
+                Count = 25,
+                Sorting = "-date",
+            });
             OutputFormatter.PrintList<TimesheetEntry>(result.Values ?? [], json);
         }, jsonOption);
 
