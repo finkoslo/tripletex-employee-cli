@@ -10,6 +10,7 @@ public static class ConfigCommand
     {
         var cmd = new Command("config", "View configuration");
         cmd.AddCommand(CreateShowCommand());
+        cmd.AddCommand(CreateClearDefaultsCommand());
         return cmd;
     }
 
@@ -38,6 +39,25 @@ public static class ConfigCommand
                 : "[dim]not set[/]");
 
             AnsiConsole.Write(table);
+        });
+
+        return cmd;
+    }
+
+    private static Command CreateClearDefaultsCommand()
+    {
+        var cmd = new Command("clear-defaults", "Clear default project and activity");
+
+        cmd.SetHandler(() =>
+        {
+            var config = ConfigStore.Load();
+            config.DefaultProjectId = null;
+            config.DefaultProjectName = null;
+            config.DefaultActivityId = null;
+            config.DefaultActivityName = null;
+            ConfigStore.Save(config);
+
+            AnsiConsole.MarkupLine("[green]Defaults cleared.[/]");
         });
 
         return cmd;

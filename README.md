@@ -292,6 +292,14 @@ $ finkletex config show
 └─────────────────┴──────────────────────────────┘
 ```
 
+#### `config clear-defaults`
+
+Clear saved default project and activity.
+
+```bash
+finkletex config clear-defaults
+```
+
 ### update
 
 ```bash
@@ -472,8 +480,9 @@ tripletex-employee-cli/
 │           ├── TimesheetCommand.cs      # log, log-week, list, recent
 │           ├── ProjectCommand.cs        # list, search
 │           ├── ActivityCommand.cs       # select
-│           └── ConfigCommand.cs         # show
+│           └── ConfigCommand.cs         # show, clear-defaults
 ├── .github/workflows/
+│   ├── auto-tag.yml                     # Auto-bump patch version on CLI changes
 │   ├── deploy-auth.yml                  # Deploy auth function to Scaleway
 │   └── release.yml                      # Multi-platform build + GitHub Release
 └── .gitignore
@@ -487,14 +496,18 @@ tripletex-employee-cli/
 
 ## Release
 
-Releases are automated via GitHub Actions. To create a release:
+Releases are automated via GitHub Actions.
+
+**Automatic:** Pushing changes to `src/Tripletex.EmployeeCli/` on `main` automatically bumps the patch version tag and triggers a release. No manual steps needed.
+
+**Manual:** You can also create a release by tagging manually:
 
 ```bash
 git tag v1.0.0
 git push origin v1.0.0
 ```
 
-This triggers the release workflow which:
+The release workflow then:
 
 1. Builds self-contained binaries for 5 platforms (macOS ARM/x64, Linux x64/ARM64, Windows x64)
 2. Archives them (`.tar.gz` for Unix, `.zip` for Windows)

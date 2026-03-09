@@ -30,6 +30,7 @@ If a command fails with "Not logged in", tell the user to run `finkletex login`.
 
 ### Config
 - `finkletex config show` — Show current configuration (email, employee, defaults)
+- `finkletex config clear-defaults` — Clear saved default project and activity
 
 ## Rules
 
