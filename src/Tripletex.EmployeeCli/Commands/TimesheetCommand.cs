@@ -312,10 +312,11 @@ public static class TimesheetCommand
             var employeeId = ConfigStore.GetEmployeeId(config);
             using var client = ClientFactory.Create(config);
 
+            var today = DateOnly.FromDateTime(DateTime.Today);
             var options = new TimesheetSearchOptions
             {
-                DateFrom = fd is not null ? DateOnly.Parse(fd) : null,
-                DateTo = td is not null ? DateOnly.Parse(td) : null,
+                DateFrom = fd is not null ? DateOnly.Parse(fd) : new DateOnly(today.Year, today.Month, 1),
+                DateTo = td is not null ? DateOnly.Parse(td) : today,
                 EmployeeId = employeeId,
                 ProjectId = pid
             };
