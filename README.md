@@ -8,6 +8,7 @@ Unlike the [admin CLI](https://github.com/murdahl/tripletex-sdk), this tool rest
 
 - [Features](#features)
 - [Installation](#installation)
+- [Updating](#updating)
 - [Authentication](#authentication)
 - [Commands](#commands)
   - [login](#login)
@@ -15,6 +16,7 @@ Unlike the [admin CLI](https://github.com/murdahl/tripletex-sdk), this tool rest
   - [project](#project)
   - [activity](#activity)
   - [config](#config)
+  - [update](#update)
 - [Configuration](#configuration)
 - [Server (Auth Function)](#server-auth-function)
   - [Architecture](#architecture)
@@ -77,6 +79,19 @@ sudo mv finkletex /usr/local/bin/
 ```bash
 dotnet publish src/Tripletex.EmployeeCli/Tripletex.EmployeeCli.csproj \
   -c Release -o ./publish
+```
+
+## Updating
+
+```bash
+# Self-update to the latest release
+finkletex update
+```
+
+Alternatively, re-run the install script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/finkoslo/tripletex-employee-cli/main/install.sh | bash
 ```
 
 ## Authentication
@@ -276,6 +291,14 @@ $ finkletex config show
 │ Default Activity│ Development (ID: 200)        │
 └─────────────────┴──────────────────────────────┘
 ```
+
+### update
+
+```bash
+finkletex update
+```
+
+Check for a newer release on GitHub and self-update the binary in place. Detects your platform and architecture automatically.
 
 ### Global Options
 

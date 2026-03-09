@@ -18,6 +18,7 @@ rootCommand.AddCommand(ConfigCommand.Create());
 rootCommand.AddCommand(TimesheetCommand.Create(jsonOption));
 rootCommand.AddCommand(ProjectCommand.Create(jsonOption));
 rootCommand.AddCommand(ActivityCommand.Create());
+rootCommand.AddCommand(UpdateCommand.Create());
 
 var parser = new CommandLineBuilder(rootCommand)
     .UseDefaults()
