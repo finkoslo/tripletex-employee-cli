@@ -11,6 +11,7 @@ public static class OutputFormatter
 
     public static void Print<T>(T item, bool json) where T : class
     {
+        json = PipeMode.ResolveJson(json);
         if (json)
         {
             Console.WriteLine(JsonSerializer.Serialize(item, JsonOptions));
@@ -33,6 +34,7 @@ public static class OutputFormatter
 
     public static void PrintList<T>(IReadOnlyList<T> items, bool json) where T : class
     {
+        json = PipeMode.ResolveJson(json);
         if (json)
         {
             Console.WriteLine(JsonSerializer.Serialize(items, JsonOptions));

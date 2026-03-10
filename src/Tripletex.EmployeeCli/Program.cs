@@ -12,20 +12,22 @@ var updateCheck = args.Any(a => a.Equals("update", StringComparison.OrdinalIgnor
     : UpdateChecker.CheckForUpdateAsync();
 
 var jsonOption = new Option<bool>("--json", "Output results as JSON");
+var yesOption = new Option<bool>(["--yes", "-y"], "Skip confirmations (auto-confirm)");
 
 var rootCommand = new RootCommand("Finkletex — manage your Tripletex timesheets")
 {
-    jsonOption
+    jsonOption,
+    yesOption
 };
 
 rootCommand.AddCommand(LoginCommand.Create());
 rootCommand.AddCommand(ConfigCommand.Create());
-rootCommand.AddCommand(TimesheetCommand.Create(jsonOption));
+rootCommand.AddCommand(TimesheetCommand.Create(jsonOption, yesOption));
 rootCommand.AddCommand(ProjectCommand.Create(jsonOption));
 rootCommand.AddCommand(ActivityCommand.Create());
 rootCommand.AddCommand(UpdateCommand.Create());
 
-foreach (var shortcut in TimesheetCommand.CreateShortcuts(jsonOption))
+foreach (var shortcut in TimesheetCommand.CreateShortcuts(jsonOption, yesOption))
     rootCommand.AddCommand(shortcut);
 
 var parser = new CommandLineBuilder(rootCommand)

@@ -1,5 +1,6 @@
 using System.CommandLine;
 using System.Globalization;
+using System.Text.Json;
 using Spectre.Console;
 using Tripletex.Api;
 using Tripletex.Api.Models;
@@ -10,10 +11,10 @@ namespace Tripletex.EmployeeCli.Commands;
 
 public static class TimesheetCommand
 {
-    public static Command Create(Option<bool> jsonOption)
+    public static Command Create(Option<bool> jsonOption, Option<bool> yesOption)
     {
         var cmd = new Command("timesheet", "Manage your timesheet entries");
-        cmd.AddCommand(CreateLogCommand(jsonOption));
+        cmd.AddCommand(CreateLogCommand(jsonOption, yesOption));
         cmd.AddCommand(CreateLogWeekCommand(jsonOption));
         cmd.AddCommand(CreateListCommand(jsonOption));
         cmd.AddCommand(CreateRecentCommand(jsonOption));
@@ -21,9 +22,9 @@ public static class TimesheetCommand
         return cmd;
     }
 
-    public static IEnumerable<Command> CreateShortcuts(Option<bool> jsonOption)
+    public static IEnumerable<Command> CreateShortcuts(Option<bool> jsonOption, Option<bool> yesOption)
     {
-        var l = CreateLogCommand(jsonOption);
+        var l = CreateLogCommand(jsonOption, yesOption);
         l.Name = "l";
         l.Description = "Log hours (shortcut for 'timesheet log')";
         yield return l;
@@ -54,7 +55,16 @@ public static class TimesheetCommand
     private const string BackSentinel = "\u2190 Back";
     private const string FilterSentinelLabel = "[blue]Filter...[/]";
 
-    private static Command CreateLogCommand(Option<bool> jsonOption)
+    private sealed class StdinLogEntry
+    {
+        public decimal? Hours { get; set; }
+        public string? Date { get; set; }
+        public string? Comment { get; set; }
+        public int? ProjectId { get; set; }
+        public int? ActivityId { get; set; }
+    }
+
+    private static Command CreateLogCommand(Option<bool> jsonOption, Option<bool> yesOption)
     {
         var hours = new Argument<decimal?>("hours") { Arity = ArgumentArity.ZeroOrOne, Description = "Number of hours to log" };
         var date = new Option<string?>("--date", "Date (yyyy-MM-dd), defaults to today");
@@ -62,7 +72,7 @@ public static class TimesheetCommand
         var projectId = new Option<int?>("--project-id", "Project ID (overrides default)");
         var activityId = new Option<int?>("--activity-id", "Activity ID (overrides default)");
 
-        var cmd = new Command("log", "Log hours (interactive if no arguments given)") { hours, date, comment, projectId, activityId };
+        var cmd = new Command("log", "Log hours (interactive if no arguments given). Accepts JSON from stdin.") { hours, date, comment, projectId, activityId };
 
         cmd.SetHandler(async (ctx) =>
         {
@@ -72,6 +82,23 @@ public static class TimesheetCommand
             var pid = ctx.ParseResult.GetValueForOption(projectId);
             var aid = ctx.ParseResult.GetValueForOption(activityId);
             var json = ctx.ParseResult.GetValueForOption(jsonOption);
+            var autoYes = ctx.ParseResult.GetValueForOption(yesOption);
+
+            var stdinJson = PipeMode.ReadStdin();
+            if (stdinJson is not null)
+            {
+                var stdinEntry = JsonSerializer.Deserialize<StdinLogEntry>(stdinJson, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                }) ?? throw new InvalidOperationException("Failed to parse JSON from stdin.");
+
+                h ??= stdinEntry.Hours;
+                d ??= stdinEntry.Date;
+                c ??= stdinEntry.Comment;
+                pid ??= stdinEntry.ProjectId;
+                aid ??= stdinEntry.ActivityId;
+                autoYes = true;
+            }
 
             var config = ConfigStore.Load();
             var employeeId = ConfigStore.GetEmployeeId(config);
@@ -85,6 +112,18 @@ public static class TimesheetCommand
 
             string? projectName = config.DefaultProjectName;
             string? activityName = config.DefaultActivityName;
+
+            if (PipeMode.IsInputRedirected)
+            {
+                resolvedDate ??= DateOnly.FromDateTime(DateTime.Today);
+
+                if (resolvedProject is null)
+                    throw new InvalidOperationException("No project specified. Use --project-id, pipe {\"projectId\":...}, or set a default.");
+                if (resolvedActivity is null)
+                    throw new InvalidOperationException("No activity specified. Use --activity-id, pipe {\"activityId\":...}, or set a default.");
+                if (resolvedHours is null || resolvedHours <= 0)
+                    throw new InvalidOperationException("No hours specified. Use hours argument or pipe {\"hours\":...}.");
+            }
 
             var step = resolvedProject is null ? LogStep.Project
                      : resolvedActivity is null ? LogStep.Activity
@@ -101,6 +140,7 @@ public static class TimesheetCommand
                 {
                     case LogStep.Project:
                     {
+                        PipeMode.RequireInteractive("Project selection");
                         var result = await PromptProjectAsync(client, config, canGoBack: false);
                         if (result is null) return;
                         resolvedProject = result.Value.id;
@@ -112,6 +152,7 @@ public static class TimesheetCommand
                     }
                     case LogStep.Activity:
                     {
+                        PipeMode.RequireInteractive("Activity selection");
                         var result = await PromptActivityAsync(client, config, resolvedProject!.Value, canGoBack: true);
                         if (result is { isBack: true }) { step = LogStep.Project; break; }
                         if (result is null) return;
@@ -122,6 +163,7 @@ public static class TimesheetCommand
                     }
                     case LogStep.Hours:
                     {
+                        PipeMode.RequireInteractive("Hours prompt");
                         resolvedHours ??= AnsiConsole.Prompt(
                             new TextPrompt<decimal>("Hours:")
                                 .Validate(v => v > 0 ? ValidationResult.Success() : ValidationResult.Error("Must be > 0")));
@@ -130,40 +172,47 @@ public static class TimesheetCommand
                     }
                     case LogStep.Date:
                     {
-                        resolvedDate ??= AnsiConsole.Prompt(
-                            new TextPrompt<DateOnly>("Date:")
-                                .DefaultValue(DateOnly.FromDateTime(DateTime.Today)));
+                        if (PipeMode.IsInputRedirected)
+                            resolvedDate ??= DateOnly.FromDateTime(DateTime.Today);
+                        else
+                            resolvedDate ??= AnsiConsole.Prompt(
+                                new TextPrompt<DateOnly>("Date:")
+                                    .DefaultValue(DateOnly.FromDateTime(DateTime.Today)));
                         step = LogStep.Comment;
                         break;
                     }
                     case LogStep.Comment:
                     {
-                        resolvedComment ??= AnsiConsole.Prompt(
-                            new TextPrompt<string>("Comment:")
-                                .AllowEmpty());
+                        if (!PipeMode.IsInputRedirected)
+                            resolvedComment ??= AnsiConsole.Prompt(
+                                new TextPrompt<string>("Comment:")
+                                    .AllowEmpty());
                         if (string.IsNullOrWhiteSpace(resolvedComment)) resolvedComment = null;
                         step = LogStep.Confirm;
                         break;
                     }
                     case LogStep.Confirm:
                     {
-                        AnsiConsole.MarkupLine($"[bold]Summary:[/]");
-                        if (config.EmployeeName is not null)
-                            AnsiConsole.MarkupLine($"  Employee: [cyan]{Markup.Escape(config.EmployeeName)}[/]");
-                        AnsiConsole.MarkupLine($"  Project:  [cyan]{Markup.Escape(projectName ?? resolvedProject.ToString()!)}[/]");
-                        AnsiConsole.MarkupLine($"  Activity: [cyan]{Markup.Escape(activityName ?? resolvedActivity.ToString()!)}[/]");
-                        AnsiConsole.MarkupLine($"  Hours:    [cyan]{resolvedHours}[/]");
-                        AnsiConsole.MarkupLine($"  Date:     [cyan]{resolvedDate:yyyy-MM-dd}[/]");
-                        if (resolvedComment is not null)
-                            AnsiConsole.MarkupLine($"  Comment:  [cyan]{Markup.Escape(resolvedComment)}[/]");
-
-                        if (!AnsiConsole.Confirm("Submit?", defaultValue: true))
+                        if (!autoYes)
                         {
-                            step = firstStep;
-                            resolvedHours = h;
-                            resolvedDate = d is not null ? DateOnly.Parse(d) : null;
-                            resolvedComment = c;
-                            break;
+                            AnsiConsole.MarkupLine($"[bold]Summary:[/]");
+                            if (config.EmployeeName is not null)
+                                AnsiConsole.MarkupLine($"  Employee: [cyan]{Markup.Escape(config.EmployeeName)}[/]");
+                            AnsiConsole.MarkupLine($"  Project:  [cyan]{Markup.Escape(projectName ?? resolvedProject.ToString()!)}[/]");
+                            AnsiConsole.MarkupLine($"  Activity: [cyan]{Markup.Escape(activityName ?? resolvedActivity.ToString()!)}[/]");
+                            AnsiConsole.MarkupLine($"  Hours:    [cyan]{resolvedHours}[/]");
+                            AnsiConsole.MarkupLine($"  Date:     [cyan]{resolvedDate:yyyy-MM-dd}[/]");
+                            if (resolvedComment is not null)
+                                AnsiConsole.MarkupLine($"  Comment:  [cyan]{Markup.Escape(resolvedComment)}[/]");
+
+                            if (!AnsiConsole.Confirm("Submit?", defaultValue: true))
+                            {
+                                step = firstStep;
+                                resolvedHours = h;
+                                resolvedDate = d is not null ? DateOnly.Parse(d) : null;
+                                resolvedComment = c;
+                                break;
+                            }
                         }
 
                         TimesheetEntry entry;
@@ -191,13 +240,16 @@ public static class TimesheetCommand
                                 return;
                             }
 
-                            AnsiConsole.MarkupLine($"[yellow]Already registered on {resolvedDate:yyyy-MM-dd}:[/]");
-                            AnsiConsole.MarkupLine($"  Hours:   [cyan]{match.Hours}[/]");
-                            if (!string.IsNullOrWhiteSpace(match.Comment))
-                                AnsiConsole.MarkupLine($"  Comment: [cyan]{Markup.Escape(match.Comment)}[/]");
+                            if (!autoYes)
+                            {
+                                AnsiConsole.MarkupLine($"[yellow]Already registered on {resolvedDate:yyyy-MM-dd}:[/]");
+                                AnsiConsole.MarkupLine($"  Hours:   [cyan]{match.Hours}[/]");
+                                if (!string.IsNullOrWhiteSpace(match.Comment))
+                                    AnsiConsole.MarkupLine($"  Comment: [cyan]{Markup.Escape(match.Comment)}[/]");
 
-                            if (!AnsiConsole.Confirm($"Overwrite with [cyan]{resolvedHours}h[/]?", defaultValue: false))
-                                return;
+                                if (!AnsiConsole.Confirm($"Overwrite with [cyan]{resolvedHours}h[/]?", defaultValue: false))
+                                    return;
+                            }
 
                             entry = await client.Timesheet.UpdateAsync(match.Id, new TimesheetEntryUpdate
                             {
@@ -212,7 +264,7 @@ public static class TimesheetCommand
                             });
                         }
 
-                        if (json)
+                        if (PipeMode.ResolveJson(json))
                         {
                             OutputFormatter.Print(entry, true);
                         }
