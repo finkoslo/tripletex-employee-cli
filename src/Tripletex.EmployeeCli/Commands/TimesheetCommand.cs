@@ -473,6 +473,8 @@ public static class TimesheetCommand
         }
 
         var sorted = projects.OrderBy(p => p.Name).ToList();
+        var noProjectSentinel = new Project { Id = 0, Name = "(No project)" };
+        sorted.Insert(0, noProjectSentinel);
         var backSentinel = canGoBack ? new Project { Id = -1, Name = BackSentinel } : null;
         if (backSentinel is not null) sorted.Insert(0, backSentinel);
 
@@ -480,12 +482,17 @@ public static class TimesheetCommand
             "Select project",
             sorted,
             p => $"{p.Name} {p.Number}",
-            p => $"{p.Name} ({p.Number ?? "no number"}) [dim]ID: {p.Id}[/]",
+            p => p == noProjectSentinel
+                ? "[dim](No project)[/]"
+                : $"{p.Name} ({p.Number ?? "no number"}) [dim]ID: {p.Id}[/]",
             backSentinel,
             filterSentinel: new Project { Id = -2 });
 
         if (selected is null || selected == backSentinel)
             return (0, null, true);
+
+        if (selected == noProjectSentinel)
+            return (0, "(No project)", false);
 
         if (AnsiConsole.Confirm("Save as default project?", defaultValue: false))
         {
@@ -501,18 +508,30 @@ public static class TimesheetCommand
     private static async Task<(int id, string? name, bool isBack)?> PromptActivityAsync(
         TripletexClient client, CliConfig config, int projectId, bool canGoBack)
     {
-        AnsiConsole.MarkupLine("[dim]Fetching activities for project...[/]");
-        var project = await client.Project.GetAsync(projectId, fields: "projectActivities(activity(*))");
-        var activities = (project.ProjectActivities ?? [])
-            .Where(pa => !pa.IsClosed)
-            .Select(pa => new Activity
-            {
-                Id = pa.Activity?.Id ?? pa.Id,
-                Name = pa.Activity?.Name,
-                DisplayName = pa.Activity?.DisplayName,
-            })
-            .OrderBy(a => a.DisplayName ?? a.Name ?? "")
-            .ToList();
+        List<Activity> activities;
+        if (projectId == 0)
+        {
+            AnsiConsole.MarkupLine("[dim]Fetching activities...[/]");
+            var result = await client.Activity.SearchAsync(isProjectActivity: false, isInactive: false);
+            activities = (result.Values ?? [])
+                .OrderBy(a => a.DisplayName ?? a.Name ?? "")
+                .ToList();
+        }
+        else
+        {
+            AnsiConsole.MarkupLine("[dim]Fetching activities for project...[/]");
+            var project = await client.Project.GetAsync(projectId, fields: "projectActivities(activity(*))");
+            activities = (project.ProjectActivities ?? [])
+                .Where(pa => !pa.IsClosed)
+                .Select(pa => new Activity
+                {
+                    Id = pa.Activity?.Id ?? pa.Id,
+                    Name = pa.Activity?.Name,
+                    DisplayName = pa.Activity?.DisplayName,
+                })
+                .OrderBy(a => a.DisplayName ?? a.Name ?? "")
+                .ToList();
+        }
 
         if (activities.Count == 0)
         {
