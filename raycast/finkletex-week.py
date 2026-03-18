@@ -20,7 +20,7 @@ FINKLETEX = "/usr/local/bin/finkletex"
 
 def main():
     result = subprocess.run(
-        [FINKLETEX, "w", "--style", "compact"],
+        [FINKLETEX, "w", "--style", "table"],
         capture_output=True, text=True,
         env={"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": __import__("os").environ["HOME"], "TERM": "dumb"},
     )
