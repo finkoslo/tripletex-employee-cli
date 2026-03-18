@@ -33,17 +33,29 @@ public static class ActivityCommand
             }
 
             using var client = ClientFactory.Create(config);
-            var project = await client.Project.GetAsync(resolvedProjectId.Value, fields: "projectActivities(activity(*))");
-            var activities = (project.ProjectActivities ?? [])
-                .Where(pa => !pa.IsClosed)
-                .Select(pa => new Activity
-                {
-                    Id = pa.Activity?.Id ?? pa.Id,
-                    Name = pa.Activity?.Name,
-                    DisplayName = pa.Activity?.DisplayName,
-                })
-                .OrderBy(a => a.DisplayName ?? a.Name ?? "")
-                .ToList();
+
+            List<Activity> activities;
+            if (resolvedProjectId.Value == 0)
+            {
+                var result = await client.Activity.SearchAsync(isProjectActivity: false, isInactive: false);
+                activities = (result.Values ?? [])
+                    .OrderBy(a => a.DisplayName ?? a.Name ?? "")
+                    .ToList();
+            }
+            else
+            {
+                var project = await client.Project.GetAsync(resolvedProjectId.Value, fields: "projectActivities(activity(*))");
+                activities = (project.ProjectActivities ?? [])
+                    .Where(pa => !pa.IsClosed)
+                    .Select(pa => new Activity
+                    {
+                        Id = pa.Activity?.Id ?? pa.Id,
+                        Name = pa.Activity?.Name,
+                        DisplayName = pa.Activity?.DisplayName,
+                    })
+                    .OrderBy(a => a.DisplayName ?? a.Name ?? "")
+                    .ToList();
+            }
 
             OutputFormatter.PrintList<Activity>(activities, json);
         }, projectId, jsonOption);
