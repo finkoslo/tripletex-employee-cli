@@ -1,11 +1,15 @@
 using System.CommandLine;
 using System.CommandLine.Builder;
 using System.CommandLine.Parsing;
+using System.Globalization;
 using System.Reflection;
 using Spectre.Console;
 using Tripletex.Api.Models;
 using Tripletex.EmployeeCli;
 using Tripletex.EmployeeCli.Commands;
+
+CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
 var updateCheck = args.Any(a => a.Equals("update", StringComparison.OrdinalIgnoreCase))
     ? null
