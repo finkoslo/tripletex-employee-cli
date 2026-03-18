@@ -7,10 +7,47 @@ namespace Tripletex.EmployeeCli.Commands;
 
 public static class ActivityCommand
 {
-    public static Command Create()
+    public static Command Create(Option<bool> jsonOption)
     {
         var cmd = new Command("activity", "Manage default activity");
+        cmd.AddCommand(CreateListCommand(jsonOption));
         cmd.AddCommand(CreateSelectCommand());
+        return cmd;
+    }
+
+    private static Command CreateListCommand(Option<bool> jsonOption)
+    {
+        var projectId = new Option<int?>("--project-id", "Filter activities by project ID");
+        var cmd = new Command("list", "List activities for a project") { projectId };
+
+        cmd.SetHandler(async (pid, json) =>
+        {
+            var config = ConfigStore.Load();
+            ConfigStore.GetEmployeeId(config);
+            var resolvedProjectId = pid ?? config.DefaultProjectId;
+
+            if (resolvedProjectId is null)
+            {
+                AnsiConsole.MarkupLine("[yellow]No project specified. Use --project-id or set a default project first.[/]");
+                return;
+            }
+
+            using var client = ClientFactory.Create(config);
+            var project = await client.Project.GetAsync(resolvedProjectId.Value, fields: "projectActivities(activity(*))");
+            var activities = (project.ProjectActivities ?? [])
+                .Where(pa => !pa.IsClosed)
+                .Select(pa => new Activity
+                {
+                    Id = pa.Activity?.Id ?? pa.Id,
+                    Name = pa.Activity?.Name,
+                    DisplayName = pa.Activity?.DisplayName,
+                })
+                .OrderBy(a => a.DisplayName ?? a.Name ?? "")
+                .ToList();
+
+            OutputFormatter.PrintList<Activity>(activities, json);
+        }, projectId, jsonOption);
+
         return cmd;
     }
 

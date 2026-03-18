@@ -24,7 +24,7 @@ rootCommand.AddCommand(LoginCommand.Create());
 rootCommand.AddCommand(ConfigCommand.Create());
 rootCommand.AddCommand(TimesheetCommand.Create(jsonOption, yesOption));
 rootCommand.AddCommand(ProjectCommand.Create(jsonOption));
-rootCommand.AddCommand(ActivityCommand.Create());
+rootCommand.AddCommand(ActivityCommand.Create(jsonOption));
 rootCommand.AddCommand(UpdateCommand.Create());
 
 foreach (var shortcut in TimesheetCommand.CreateShortcuts(jsonOption, yesOption))
