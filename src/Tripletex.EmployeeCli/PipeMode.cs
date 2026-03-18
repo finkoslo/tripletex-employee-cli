@@ -11,7 +11,8 @@ public static class PipeMode
     public static string? ReadStdin()
     {
         if (!IsInputRedirected) return null;
-        return Console.In.ReadToEnd();
+        var input = Console.In.ReadToEnd();
+        return string.IsNullOrWhiteSpace(input) ? null : input;
     }
 
     public static void RequireInteractive(string feature)
