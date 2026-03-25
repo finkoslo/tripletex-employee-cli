@@ -22,12 +22,31 @@ const TRIPLETEX_EMPLOYEE_TOKEN = process.env.TRIPLETEX_EMPLOYEE_TOKEN!;
 const ALLOWED_DOMAIN = process.env.ALLOWED_DOMAIN || "fink.no";
 const TOKEN_EXPIRY_SECONDS = 60 * 60 * 24 * 365;
 
-type UserMap = Record<string, { employeeId: number; name: string }>;
+interface TenantConfig {
+  consumerToken: string;
+  employeeToken: string;
+}
+
+type TenantMap = Record<string, TenantConfig>;
+
+interface UserEntry {
+  employeeId: number;
+  name: string;
+  tenant?: string;
+}
+
+type UserMap = Record<string, UserEntry>;
 
 function loadUsers(): UserMap {
   const raw = process.env.USERS_JSON;
   if (!raw) throw new Error("USERS_JSON environment variable is not set");
   return JSON.parse(raw) as UserMap;
+}
+
+function loadTenants(): TenantMap | null {
+  const raw = process.env.TENANTS_JSON;
+  if (!raw) return null;
+  return JSON.parse(raw) as TenantMap;
 }
 
 function redirect(url: string): ScalewayResponse {
@@ -150,12 +169,26 @@ async function handleCallback(
     );
   }
 
+  const tenants = loadTenants();
+  let consumerToken: string;
+  let employeeToken: string;
+
+  if (user.tenant && tenants?.[user.tenant]) {
+    const tenant = tenants[user.tenant];
+    consumerToken = tenant.consumerToken;
+    employeeToken = tenant.employeeToken;
+  } else {
+    consumerToken = TRIPLETEX_CONSUMER_TOKEN;
+    employeeToken = TRIPLETEX_EMPLOYEE_TOKEN;
+  }
+
   const payload = {
-    consumerToken: TRIPLETEX_CONSUMER_TOKEN,
-    employeeToken: TRIPLETEX_EMPLOYEE_TOKEN,
+    consumerToken,
+    employeeToken,
     employeeId: user.employeeId,
     employeeName: user.name,
     email,
+    tenant: user.tenant,
     exp: Math.floor(Date.now() / 1000) + TOKEN_EXPIRY_SECONDS,
   };
 

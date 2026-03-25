@@ -33,4 +33,7 @@ public sealed class CliConfig
 
     [JsonPropertyName("defaultActivityName")]
     public string? DefaultActivityName { get; set; }
+
+    [JsonPropertyName("tenant")]
+    public string? Tenant { get; set; }
 }

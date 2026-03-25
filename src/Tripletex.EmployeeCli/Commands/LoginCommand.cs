@@ -108,7 +108,8 @@ public static class LoginCommand
                 EmployeeId = payload.EmployeeId,
                 EmployeeName = payload.EmployeeName,
                 Email = payload.Email,
-                Environment = "production"
+                Environment = "production",
+                Tenant = payload.Tenant
             };
 
             var existing = ConfigStore.Load();
@@ -175,6 +176,8 @@ public static class LoginCommand
         public string? EmployeeName { get; set; }
         [JsonPropertyName("email")]
         public string? Email { get; set; }
+        [JsonPropertyName("tenant")]
+        public string? Tenant { get; set; }
         [JsonPropertyName("exp")]
         public long Exp { get; set; }
     }
