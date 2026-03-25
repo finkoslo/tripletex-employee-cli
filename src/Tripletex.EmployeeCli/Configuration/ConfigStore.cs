@@ -44,7 +44,7 @@ public static class ConfigStore
         ?? throw new InvalidOperationException(
             "Not logged in. Run 'finkletex login' first.");
 
-    public static int GetEmployeeId(CliConfig config) =>
+    public static long GetEmployeeId(CliConfig config) =>
         config.EmployeeId
         ?? throw new InvalidOperationException(
             "Not logged in. Run 'finkletex login' first.");

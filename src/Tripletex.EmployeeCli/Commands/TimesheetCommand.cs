@@ -60,8 +60,8 @@ public static class TimesheetCommand
         public decimal? Hours { get; set; }
         public string? Date { get; set; }
         public string? Comment { get; set; }
-        public int? ProjectId { get; set; }
-        public int? ActivityId { get; set; }
+        public long? ProjectId { get; set; }
+        public long? ActivityId { get; set; }
     }
 
     private static Command CreateLogCommand(Option<bool> jsonOption, Option<bool> yesOption)
@@ -69,8 +69,8 @@ public static class TimesheetCommand
         var hours = new Argument<decimal?>("hours") { Arity = ArgumentArity.ZeroOrOne, Description = "Number of hours to log" };
         var date = new Option<string?>("--date", "Date (yyyy-MM-dd), defaults to today");
         var comment = new Option<string?>("--comment", "Comment for the entry");
-        var projectId = new Option<int?>("--project-id", "Project ID (overrides default)");
-        var activityId = new Option<int?>("--activity-id", "Activity ID (overrides default)");
+        var projectId = new Option<long?>("--project-id", "Project ID (overrides default)");
+        var activityId = new Option<long?>("--activity-id", "Activity ID (overrides default)");
 
         var cmd = new Command("log", "Log hours (interactive if no arguments given). Accepts JSON from stdin.") { hours, date, comment, projectId, activityId };
 
@@ -104,8 +104,8 @@ public static class TimesheetCommand
             var employeeId = ConfigStore.GetEmployeeId(config);
             using var client = ClientFactory.Create(config);
 
-            int? resolvedProject = pid ?? config.DefaultProjectId;
-            int? resolvedActivity = aid ?? config.DefaultActivityId;
+            long? resolvedProject = pid ?? config.DefaultProjectId;
+            long? resolvedActivity = aid ?? config.DefaultActivityId;
             decimal? resolvedHours = h;
             DateOnly? resolvedDate = d is not null ? DateOnly.Parse(d) : null;
             string? resolvedComment = c;
@@ -294,8 +294,8 @@ public static class TimesheetCommand
         var sat = new Option<decimal>("--sat", () => 0, "Hours for Saturday");
         var sun = new Option<decimal>("--sun", () => 0, "Hours for Sunday");
         var comment = new Option<string?>("--comment", "Comment for all entries");
-        var projectId = new Option<int?>("--project-id", "Project ID (overrides default)");
-        var activityId = new Option<int?>("--activity-id", "Activity ID (overrides default)");
+        var projectId = new Option<long?>("--project-id", "Project ID (overrides default)");
+        var activityId = new Option<long?>("--activity-id", "Activity ID (overrides default)");
 
         var cmd = new Command("log-week", "Log hours for a full week")
         {
@@ -354,7 +354,7 @@ public static class TimesheetCommand
     {
         var fromDate = new Option<string?>("--from-date", "Start date (yyyy-MM-dd)");
         var toDate = new Option<string?>("--to-date", "End date (yyyy-MM-dd)");
-        var projectId = new Option<int?>("--project-id", "Filter by project ID");
+        var projectId = new Option<long?>("--project-id", "Filter by project ID");
 
         var cmd = new Command("list", "List your timesheet entries") { fromDate, toDate, projectId };
 
@@ -459,7 +459,7 @@ public static class TimesheetCommand
         }
     }
 
-    private static async Task<(int id, string? name, bool isBack)?> PromptProjectAsync(
+    private static async Task<(long id, string? name, bool isBack)?> PromptProjectAsync(
         TripletexClient client, CliConfig config, bool canGoBack)
     {
         AnsiConsole.MarkupLine("[dim]Fetching projects...[/]");
@@ -505,8 +505,8 @@ public static class TimesheetCommand
         return (selected.Id, selected.Name, false);
     }
 
-    private static async Task<(int id, string? name, bool isBack)?> PromptActivityAsync(
-        TripletexClient client, CliConfig config, int projectId, bool canGoBack)
+    private static async Task<(long id, string? name, bool isBack)?> PromptActivityAsync(
+        TripletexClient client, CliConfig config, long projectId, bool canGoBack)
     {
         List<Activity> activities;
         if (projectId == 0)
@@ -586,7 +586,7 @@ public static class TimesheetCommand
         return cmd;
     }
 
-    internal static async Task DisplayWeekAsync(TripletexClient client, int employeeId, DateOnly dateInWeek, string style = "table", bool json = false)
+    internal static async Task DisplayWeekAsync(TripletexClient client, long employeeId, DateOnly dateInWeek, string style = "table", bool json = false)
     {
         var monday = dateInWeek.AddDays(-(int)dateInWeek.DayOfWeek + (int)DayOfWeek.Monday);
         if (dateInWeek.DayOfWeek == DayOfWeek.Sunday)
@@ -616,7 +616,7 @@ public static class TimesheetCommand
             .Distinct()
             .ToList();
 
-        var projectNames = new Dictionary<int, string>();
+        var projectNames = new Dictionary<long, string>();
         foreach (var pid in projectIds)
         {
             try
@@ -649,7 +649,7 @@ public static class TimesheetCommand
         }
     }
 
-    private static void DisplayTable(IReadOnlyList<TimesheetEntry> entries, Dictionary<int, string> projectNames, DateOnly monday, string weekLabel, decimal weeklyTarget)
+    private static void DisplayTable(IReadOnlyList<TimesheetEntry> entries, Dictionary<long, string> projectNames, DateOnly monday, string weekLabel, decimal weeklyTarget)
     {
         var dayNames = new[] { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
 
@@ -755,7 +755,7 @@ public static class TimesheetCommand
         AnsiConsole.MarkupLine($"  Total: {total:0.#} / {weeklyTarget}h {check}");
     }
 
-    private static void DisplayCompact(IReadOnlyList<TimesheetEntry> entries, Dictionary<int, string> projectNames, DateOnly monday, string weekLabel, decimal weeklyTarget)
+    private static void DisplayCompact(IReadOnlyList<TimesheetEntry> entries, Dictionary<long, string> projectNames, DateOnly monday, string weekLabel, decimal weeklyTarget)
     {
         AnsiConsole.MarkupLine($"\n[bold]{Markup.Escape(weekLabel)}[/]");
 

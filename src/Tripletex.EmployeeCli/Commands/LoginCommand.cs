@@ -170,7 +170,7 @@ public static class LoginCommand
         [JsonPropertyName("employeeToken")]
         public string? EmployeeToken { get; set; }
         [JsonPropertyName("employeeId")]
-        public int EmployeeId { get; set; }
+        public long EmployeeId { get; set; }
         [JsonPropertyName("employeeName")]
         public string? EmployeeName { get; set; }
         [JsonPropertyName("email")]

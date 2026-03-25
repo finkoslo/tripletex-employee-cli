@@ -11,7 +11,7 @@ public sealed class CliConfig
     public string? EmployeeToken { get; set; }
 
     [JsonPropertyName("employeeId")]
-    public int? EmployeeId { get; set; }
+    public long? EmployeeId { get; set; }
 
     [JsonPropertyName("employeeName")]
     public string? EmployeeName { get; set; }
@@ -23,13 +23,13 @@ public sealed class CliConfig
     public string? Environment { get; set; }
 
     [JsonPropertyName("defaultProjectId")]
-    public int? DefaultProjectId { get; set; }
+    public long? DefaultProjectId { get; set; }
 
     [JsonPropertyName("defaultProjectName")]
     public string? DefaultProjectName { get; set; }
 
     [JsonPropertyName("defaultActivityId")]
-    public int? DefaultActivityId { get; set; }
+    public long? DefaultActivityId { get; set; }
 
     [JsonPropertyName("defaultActivityName")]
     public string? DefaultActivityName { get; set; }

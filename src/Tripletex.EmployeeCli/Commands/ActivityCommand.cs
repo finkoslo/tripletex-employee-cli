@@ -17,7 +17,7 @@ public static class ActivityCommand
 
     private static Command CreateListCommand(Option<bool> jsonOption)
     {
-        var projectId = new Option<int?>("--project-id", "Filter activities by project ID");
+        var projectId = new Option<long?>("--project-id", "Filter activities by project ID");
         var cmd = new Command("list", "List activities for a project") { projectId };
 
         cmd.SetHandler(async (pid, json) =>
@@ -65,7 +65,7 @@ public static class ActivityCommand
 
     private static Command CreateSelectCommand()
     {
-        var projectId = new Option<int?>("--project-id", "Filter activities by project ID");
+        var projectId = new Option<long?>("--project-id", "Filter activities by project ID");
         var cmd = new Command("select", "Interactively select a default activity") { projectId };
 
         cmd.SetHandler(async (pid) =>
