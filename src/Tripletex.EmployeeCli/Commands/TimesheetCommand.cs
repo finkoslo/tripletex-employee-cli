@@ -218,20 +218,26 @@ public static class TimesheetCommand
                         TimesheetEntry entry;
                         try
                         {
-                            entry = await client.Timesheet.LogHoursAsync(
-                                resolvedActivity!.Value, resolvedProject!.Value, resolvedDate!.Value,
-                                resolvedHours!.Value, resolvedComment, employeeId);
+                            entry = await AnsiConsole.Status()
+                                .Spinner(Spinner.Known.Dots)
+                                .StartAsync("Logging hours...", async _ =>
+                                    await client.Timesheet.LogHoursAsync(
+                                        resolvedActivity!.Value, resolvedProject!.Value, resolvedDate!.Value,
+                                        resolvedHours!.Value, resolvedComment, employeeId));
                         }
                         catch (TripletexApiException ex) when (ex.StatusCode == 409)
                         {
-                            var existing = await client.Timesheet.SearchAsync(new TimesheetSearchOptions
-                            {
-                                EmployeeId = employeeId,
-                                ProjectId = resolvedProject,
-                                ActivityId = resolvedActivity,
-                                DateFrom = resolvedDate,
-                                DateTo = resolvedDate!.Value.AddDays(1),
-                            });
+                            var existing = await AnsiConsole.Status()
+                                .Spinner(Spinner.Known.Dots)
+                                .StartAsync("Checking existing entry...", async _ =>
+                                    await client.Timesheet.SearchAsync(new TimesheetSearchOptions
+                                    {
+                                        EmployeeId = employeeId,
+                                        ProjectId = resolvedProject,
+                                        ActivityId = resolvedActivity,
+                                        DateFrom = resolvedDate,
+                                        DateTo = resolvedDate!.Value.AddDays(1),
+                                    }));
 
                             var match = existing.Values?.FirstOrDefault();
                             if (match is null)
@@ -251,17 +257,20 @@ public static class TimesheetCommand
                                     return;
                             }
 
-                            entry = await client.Timesheet.UpdateAsync(match.Id, new TimesheetEntryUpdate
-                            {
-                                Id = match.Id,
-                                Version = match.Version,
-                                Activity = new IdRef { Id = resolvedActivity!.Value },
-                                Project = new IdRef { Id = resolvedProject!.Value },
-                                Date = resolvedDate!.Value.ToString("yyyy-MM-dd"),
-                                Hours = resolvedHours!.Value,
-                                Comment = resolvedComment ?? "",
-                                Employee = new IdRef { Id = employeeId },
-                            });
+                            entry = await AnsiConsole.Status()
+                                .Spinner(Spinner.Known.Dots)
+                                .StartAsync("Updating entry...", async _ =>
+                                    await client.Timesheet.UpdateAsync(match.Id, new TimesheetEntryUpdate
+                                    {
+                                        Id = match.Id,
+                                        Version = match.Version,
+                                        Activity = new IdRef { Id = resolvedActivity!.Value },
+                                        Project = new IdRef { Id = resolvedProject!.Value },
+                                        Date = resolvedDate!.Value.ToString("yyyy-MM-dd"),
+                                        Hours = resolvedHours!.Value,
+                                        Comment = resolvedComment ?? "",
+                                        Employee = new IdRef { Id = employeeId },
+                                    }));
                         }
 
                         if (PipeMode.ResolveJson(json))
@@ -605,42 +614,43 @@ public static class TimesheetCommand
             monday = monday.AddDays(-7);
         var sunday = monday.AddDays(6);
 
-        var result = await client.Timesheet.SearchAsync(new TimesheetSearchOptions
-        {
-            EmployeeId = employeeId,
-            DateFrom = monday,
-            DateTo = sunday.AddDays(1),
-            Count = 1000,
-            Sorting = "date",
-        });
-
-        var entries = result.Values ?? [];
-
-        if (json)
-        {
-            OutputFormatter.PrintList<TimesheetEntry>(entries, true);
-            return;
-        }
-
-        var projectIds = entries
-            .Where(e => e.Project is not null)
-            .Select(e => e.Project!.Id)
-            .Distinct()
-            .ToList();
-
-        var projectNames = new Dictionary<long, string>();
-        foreach (var pid in projectIds)
-        {
-            try
+        var (entries, projectNames) = await AnsiConsole.Status()
+            .Spinner(Spinner.Known.Dots)
+            .StartAsync("Fetching week...", async _ =>
             {
-                var project = await client.Project.GetAsync(pid, fields: "id,name");
-                projectNames[pid] = project.Name ?? $"Project {pid}";
-            }
-            catch
-            {
-                projectNames[pid] = $"Project {pid}";
-            }
-        }
+                var result = await client.Timesheet.SearchAsync(new TimesheetSearchOptions
+                {
+                    EmployeeId = employeeId,
+                    DateFrom = monday,
+                    DateTo = sunday.AddDays(1),
+                    Count = 1000,
+                    Sorting = "date",
+                });
+
+                var e = result.Values ?? [];
+
+                var projectIds = e
+                    .Where(x => x.Project is not null)
+                    .Select(x => x.Project!.Id)
+                    .Distinct()
+                    .ToList();
+
+                var names = new Dictionary<long, string>();
+                foreach (var pid in projectIds)
+                {
+                    try
+                    {
+                        var project = await client.Project.GetAsync(pid, fields: "id,name");
+                        names[pid] = project.Name ?? $"Project {pid}";
+                    }
+                    catch
+                    {
+                        names[pid] = $"Project {pid}";
+                    }
+                }
+
+                return (e, names);
+            });
 
         var weekNumber = ISOWeek.GetWeekOfYear(monday.ToDateTime(TimeOnly.MinValue));
         var weekLabel = $"Week {weekNumber} ({monday:MMM d} - {sunday:MMM d})";
