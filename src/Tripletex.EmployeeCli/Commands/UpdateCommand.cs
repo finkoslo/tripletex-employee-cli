@@ -21,6 +21,7 @@ public static class UpdateCommand
             http.DefaultRequestHeaders.UserAgent.ParseAdd("finkletex-updater");
 
             var release = await AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
                 .StartAsync("Checking for updates...", async _ =>
                     await http.GetFromJsonAsync<UpdateChecker.GitHubRelease>(UpdateChecker.ReleasesUrl));
 
@@ -67,6 +68,7 @@ public static class UpdateCommand
                 var archivePath = Path.Combine(tempDir, assetName);
 
                 await AnsiConsole.Status()
+                    .Spinner(Spinner.Known.Dots)
                     .StartAsync("Downloading...", async _ =>
                     {
                         var bytes = await http.GetByteArrayAsync(assetUrl);

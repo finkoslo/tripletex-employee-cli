@@ -1,0 +1,10 @@
+{
+  "fink-oslo": {
+    "consumerToken": "your-consumer-token",
+    "employeeToken": "your-employee-token"
+  },
+  "fink-trondheim": {
+    "consumerToken": "another-consumer-token",
+    "employeeToken": "another-employee-token"
+  }
+}

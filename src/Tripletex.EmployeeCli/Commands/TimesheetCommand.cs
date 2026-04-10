@@ -462,9 +462,13 @@ public static class TimesheetCommand
     private static async Task<(long id, string? name, bool isBack)?> PromptProjectAsync(
         TripletexClient client, CliConfig config, bool canGoBack)
     {
-        AnsiConsole.MarkupLine("[dim]Fetching projects...[/]");
-        var result = await client.Project.SearchAsync();
-        var projects = result.Values ?? [];
+        var projects = await AnsiConsole.Status()
+            .Spinner(Spinner.Known.Dots)
+            .StartAsync("Fetching projects...", async _ =>
+            {
+                var result = await client.Project.SearchAsync();
+                return result.Values ?? [];
+            });
 
         if (projects.Count == 0)
         {
@@ -511,26 +515,34 @@ public static class TimesheetCommand
         List<Activity> activities;
         if (projectId == 0)
         {
-            AnsiConsole.MarkupLine("[dim]Fetching activities...[/]");
-            var result = await client.Activity.SearchAsync(isProjectActivity: false, isInactive: false);
-            activities = (result.Values ?? [])
-                .OrderBy(a => a.DisplayName ?? a.Name ?? "")
-                .ToList();
+            activities = await AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
+                .StartAsync("Fetching activities...", async _ =>
+                {
+                    var result = await client.Activity.SearchAsync(isProjectActivity: false, isInactive: false);
+                    return (result.Values ?? [])
+                        .OrderBy(a => a.DisplayName ?? a.Name ?? "")
+                        .ToList();
+                });
         }
         else
         {
-            AnsiConsole.MarkupLine("[dim]Fetching activities for project...[/]");
-            var project = await client.Project.GetAsync(projectId, fields: "projectActivities(activity(*))");
-            activities = (project.ProjectActivities ?? [])
-                .Where(pa => !pa.IsClosed)
-                .Select(pa => new Activity
+            activities = await AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
+                .StartAsync("Fetching activities for project...", async _ =>
                 {
-                    Id = pa.Activity?.Id ?? pa.Id,
-                    Name = pa.Activity?.Name,
-                    DisplayName = pa.Activity?.DisplayName,
-                })
-                .OrderBy(a => a.DisplayName ?? a.Name ?? "")
-                .ToList();
+                    var project = await client.Project.GetAsync(projectId, fields: "projectActivities(activity(*))");
+                    return (project.ProjectActivities ?? [])
+                        .Where(pa => !pa.IsClosed)
+                        .Select(pa => new Activity
+                        {
+                            Id = pa.Activity?.Id ?? pa.Id,
+                            Name = pa.Activity?.Name,
+                            DisplayName = pa.Activity?.DisplayName,
+                        })
+                        .OrderBy(a => a.DisplayName ?? a.Name ?? "")
+                        .ToList();
+                });
         }
 
         if (activities.Count == 0)
