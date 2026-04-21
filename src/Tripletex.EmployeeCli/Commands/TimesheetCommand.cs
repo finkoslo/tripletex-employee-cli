@@ -175,9 +175,7 @@ public static class TimesheetCommand
                         if (PipeMode.IsInputRedirected)
                             resolvedDate ??= DateOnly.FromDateTime(DateTime.Today);
                         else
-                            resolvedDate ??= AnsiConsole.Prompt(
-                                new TextPrompt<DateOnly>("Date:")
-                                    .DefaultValue(DateOnly.FromDateTime(DateTime.Today)));
+                            resolvedDate ??= DatePrompt.Ask("Date:", DateOnly.FromDateTime(DateTime.Today));
                         step = LogStep.Comment;
                         break;
                     }
