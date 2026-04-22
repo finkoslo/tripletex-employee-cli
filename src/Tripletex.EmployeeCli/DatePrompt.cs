@@ -5,11 +5,11 @@ namespace Tripletex.EmployeeCli;
 
 public static class DatePrompt
 {
-    private const string NavHint = "[grey]  ↑/↓ day · Shift+↑/↓ week · PgUp/PgDn month · type to edit · Enter[/]";
+    private const string NavHint = "[grey]  ↑/↓ day · Shift+↑/↓ week · PgUp/PgDn month · type to edit · Esc back · Enter[/]";
     private const string EditHint = "[grey]  type yyyy-MM-dd · Esc cancels · Enter confirms[/]";
     private const string InvalidMarker = "  [red]invalid[/]";
 
-    public static DateOnly Ask(string label, DateOnly initial)
+    public static DateOnly? Ask(string label, DateOnly initial)
     {
         if (Console.IsInputRedirected)
             throw new InvalidOperationException($"{label} prompt requires an interactive terminal.");
@@ -44,6 +44,9 @@ public static class DatePrompt
                     case ConsoleKey.Enter:
                         RenderCommitted(escapedLabel, date);
                         return date;
+                    case ConsoleKey.Escape:
+                        RenderCancelled(escapedLabel);
+                        return null;
                     default:
                         if (IsDateChar(key.KeyChar))
                         {
@@ -115,6 +118,14 @@ public static class DatePrompt
     {
         Console.Write('\r');
         AnsiConsole.Markup($"{label} [cyan]{date:yyyy-MM-dd}[/]");
+        Console.Write("\x1b[K");
+        Console.WriteLine();
+    }
+
+    private static void RenderCancelled(string label)
+    {
+        Console.Write('\r');
+        AnsiConsole.Markup($"{label} [dim]cancelled[/]");
         Console.Write("\x1b[K");
         Console.WriteLine();
     }

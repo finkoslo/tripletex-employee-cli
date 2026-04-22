@@ -164,27 +164,38 @@ public static class TimesheetCommand
                     case LogStep.Hours:
                     {
                         PipeMode.RequireInteractive("Hours prompt");
-                        resolvedHours ??= AnsiConsole.Prompt(
-                            new TextPrompt<decimal>("Hours:")
-                                .Validate(v => v > 0 ? ValidationResult.Success() : ValidationResult.Error("Must be > 0")));
+                        if (resolvedHours is null)
+                        {
+                            var entered = NumberPrompt.AskHours("Hours:");
+                            if (entered is null) { resolvedActivity = null; activityName = null; step = LogStep.Activity; break; }
+                            resolvedHours = entered;
+                        }
                         step = LogStep.Date;
                         break;
                     }
                     case LogStep.Date:
                     {
                         if (PipeMode.IsInputRedirected)
+                        {
                             resolvedDate ??= DateOnly.FromDateTime(DateTime.Today);
-                        else
-                            resolvedDate ??= DatePrompt.Ask("Date:", DateOnly.FromDateTime(DateTime.Today));
+                        }
+                        else if (resolvedDate is null)
+                        {
+                            var entered = DatePrompt.Ask("Date:", DateOnly.FromDateTime(DateTime.Today));
+                            if (entered is null) { resolvedHours = null; step = LogStep.Hours; break; }
+                            resolvedDate = entered;
+                        }
                         step = LogStep.Comment;
                         break;
                     }
                     case LogStep.Comment:
                     {
-                        if (!PipeMode.IsInputRedirected)
-                            resolvedComment ??= AnsiConsole.Prompt(
-                                new TextPrompt<string>("Comment:")
-                                    .AllowEmpty());
+                        if (!PipeMode.IsInputRedirected && resolvedComment is null)
+                        {
+                            var entered = TextLinePrompt.Ask("Comment:");
+                            if (entered.Cancelled) { resolvedDate = null; step = LogStep.Date; break; }
+                            resolvedComment = entered.Value;
+                        }
                         if (string.IsNullOrWhiteSpace(resolvedComment)) resolvedComment = null;
                         step = LogStep.Confirm;
                         break;
@@ -203,7 +214,9 @@ public static class TimesheetCommand
                             if (resolvedComment is not null)
                                 AnsiConsole.MarkupLine($"  Comment:  [cyan]{Markup.Escape(resolvedComment)}[/]");
 
-                            if (!AnsiConsole.Confirm("Submit?", defaultValue: true))
+                            var submit = ConfirmPrompt.Ask("Submit?", defaultValue: true);
+                            if (submit is null) { resolvedComment = null; step = LogStep.Comment; break; }
+                            if (!submit.Value)
                             {
                                 step = firstStep;
                                 resolvedHours = h;
