@@ -176,7 +176,7 @@ public static class ConfirmPrompt
     private static void Render(string label, bool defaultValue)
     {
         Console.Write('\r');
-        var hint = defaultValue ? "[Y/n]" : "[y/N]";
+        var hint = defaultValue ? "[[Y/n]]" : "[[y/N]]";
         AnsiConsole.Markup($"{label} [grey]{hint}[/]  [grey]Esc back[/]");
         Console.Write("\x1b[K");
     }
