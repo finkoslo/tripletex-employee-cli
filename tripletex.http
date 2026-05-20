@@ -1,0 +1,29 @@
+### Tripletex API — employee lookup
+### Use with the VS Code "REST Client" extension (or JetBrains HTTP client).
+### Run request 1 first, copy the returned session token into @sessionToken below.
+
+@baseUrl = https://tripletex.no/v2
+@consumerToken = ...
+@employeeToken = ...
+@expirationDate = 2026-05-22
+
+### 1. Create a session token (no auth required)
+# @name session
+PUT {{baseUrl}}/token/session/:create?consumerToken={{consumerToken}}&employeeToken={{employeeToken}}&expirationDate={{expirationDate}}
+
+### --- After request 1 succeeds, paste session.value.token here ---
+@sessionToken = ...session.value.token..
+
+### Basic auth header: base64("0:<sessionToken>"). REST Client computes this from the values above.
+
+### 2. List all employees (id, firstName, lastName, email)
+GET {{baseUrl}}/employee?from=0&count=1000&fields=id,firstName,lastName,email
+Authorization: Basic 0:{{sessionToken}}
+
+### 3. Look up a single employee by email
+GET {{baseUrl}}/employee?email=andreas.rodland@fink.no&fields=id,firstName,lastName,email
+Authorization: Basic 0:{{sessionToken}}
+
+### 4. Whoami — confirm which tenant/company the token belongs to
+GET {{baseUrl}}/token/session/>whoAmI
+Authorization: Basic 0:{{sessionToken}}

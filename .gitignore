@@ -11,3 +11,5 @@ dist/
 server/users.json
 appsettings.local.json
 server/tenants.json
+fink-oslo.csv
+fink-trondheim.csv
