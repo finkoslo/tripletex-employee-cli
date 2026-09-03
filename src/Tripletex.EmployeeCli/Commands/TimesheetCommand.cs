@@ -496,6 +496,13 @@ public static class TimesheetCommand
             return null;
         }
 
+        if (projects.All(p => string.IsNullOrWhiteSpace(p.Name)))
+        {
+            AnsiConsole.MarkupLine("[yellow]Projects returned without names — this Tripletex integration lacks Project read access.[/]");
+            AnsiConsole.MarkupLine("[dim]Ask your Tripletex admin to grant the API integration read access to the Project module.[/]");
+            return null;
+        }
+
         var sorted = projects.OrderBy(p => p.Name).ToList();
         var noProjectSentinel = new Project { Id = 0, Name = "(No project)" };
         sorted.Insert(0, noProjectSentinel);
